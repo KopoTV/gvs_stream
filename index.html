@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lecteur vidéo personnalisé complet</title>
+  <style>
+    body {
+      margin: 0;
+      background: #000;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+
+    .video-container {
+      position: relative;
+      max-width: 800px;
+      width: 100%;
+    }
+
+    video {
+      width: 100%;
+      display: block;
+    }
+
+    .controls {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: linear-gradient(to top, rgba(0, 0, 0, 1), rgba(0, 0, 0, 0));
+      padding: 10px;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .controls.visible {
+      opacity: 1;
+    }
+
+    .progress-bar {
+      width: 100%;
+      height: 5px;
+      background: #444;
+      cursor: pointer;
+      position: relative;
+    }
+
+    .progress {
+      height: 100%;
+      background: red;
+      width: 0%;
+    }
+
+    .progress-dot {
+      width: 12px;
+      height: 12px;
+      background: url('point.png') no-repeat center/contain;
+      position: absolute;
+      top: 50%;
+      transform: translate(50%, -50%);
+      left: 0;
+    }
+
+    .control-buttons {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .left-controls,
+    .right-controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .control-buttons img {
+      width: 24px;
+      height: 24px;
+      cursor: pointer;
+    }
+
+    .time {
+      color: white;
+      font-family: monospace;
+      font-size: 14px;
+    }
+
+    .volume-container {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .volume-bar {
+      width: 80px;
+      height: 5px;
+      background: #888;
+      cursor: pointer;
+      position: relative;
+    }
+
+    .volume-fill {
+      height: 100%;
+      background: white;
+      width: 100%;
+    }
+
+    .hide-cursor {
+      cursor: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="video-container hide-cursor" id="videoContainer">
+    <video id="video" src="video.mp4"></video>
+
+    <div class="controls" id="controls">
+      <div class="progress-bar" id="progressBar">
+        <div class="progress" id="progress"></div>
+        <div class="progress-dot" id="progressDot"></div>
+      </div>
+
+      <div class="control-buttons">
+        <div class="left-controls">
+          <img id="rewind" src="R-10.png" alt="Rewind 10s">
+          <img id="playPause" src="play.png" alt="Play/Pause">
+          <img id="forward" src="N-10.png" alt="Forward 10s">
+          <div class="time" id="time">00:00 / 00:00</div>
+        </div>
+        <div class="right-controls">
+          <div class="volume-container">
+            <img src="volume.png" alt="Volume">
+            <div class="volume-bar" id="volumeBar">
+              <div class="volume-fill" id="volumeFill"></div>
+            </div>
+          </div>
+          <img id="fullscreen" src="fullscreen.png" alt="Fullscreen">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const video = document.getElementById('video');
+    const controls = document.getElementById('controls');
+    const playPause = document.getElementById('playPause');
+    const rewind = document.getElementById('rewind');
+    const forward = document.getElementById('forward');
+    const fullscreen = document.getElementById('fullscreen');
+    const time = document.getElementById('time');
+    const progressBar = document.getElementById('progressBar');
+    const progress = document.getElementById('progress');
+    const progressDot = document.getElementById('progressDot');
+    const volumeBar = document.getElementById('volumeBar');
+    const volumeFill = document.getElementById('volumeFill');
+    const container = document.getElementById('videoContainer');
+
+    let hideControlsTimeout;
+    let isSeeking = false;
+    let isAdjustingVolume = false;
+
+    function formatTime(seconds) {
+      const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+      const s = Math.floor(seconds % 60).toString().padStart(2, '0');
+      return `${m}:${s}`;
+    }
+
+    function updateTime() {
+      time.textContent = `${formatTime(video.currentTime)} / ${formatTime(video.duration)}`;
+      const percent = (video.currentTime / video.duration) * 100;
+      progress.style.width = `${percent}%`;
+      progressDot.style.left = `${percent}%`;
+    }
+
+    function togglePlay() {
+      if (video.paused) {
+        video.play();
+        playPause.src = 'pause.png';
+      } else {
+        video.pause();
+        playPause.src = 'play.png';
+      }
+    }
+
+    playPause.addEventListener('click', togglePlay);
+    video.addEventListener('click', togglePlay);
+    document.addEventListener('keydown', (e) => {
+      if (e.code === 'Space') {
+        e.preventDefault();
+        togglePlay();
+      }
+    });
+
+    rewind.addEventListener('click', () => video.currentTime -= 10);
+    forward.addEventListener('click', () => video.currentTime += 10);
+
+    fullscreen.addEventListener('click', () => {
+      if (!document.fullscreenElement) container.requestFullscreen();
+      else document.exitFullscreen();
+    });
+
+    function seek(e) {
+      const rect = progressBar.getBoundingClientRect();
+      const percent = (e.clientX - rect.left) / rect.width;
+      video.currentTime = Math.max(0, Math.min(percent, 1)) * video.duration;
+    }
+
+    progressBar.addEventListener('mousedown', e => { isSeeking = true; seek(e); });
+    document.addEventListener('mousemove', e => { if (isSeeking) seek(e); });
+    document.addEventListener('mouseup', () => { isSeeking = false; });
+
+    function adjustVolume(e) {
+      const rect = volumeBar.getBoundingClientRect();
+      const percent = (e.clientX - rect.left) / rect.width;
+      video.volume = Math.max(0, Math.min(percent, 1));
+      volumeFill.style.width = `${video.volume * 100}%`;
+    }
+
+    volumeBar.addEventListener('mousedown', e => { isAdjustingVolume = true; adjustVolume(e); });
+    document.addEventListener('mousemove', e => { if (isAdjustingVolume) adjustVolume(e); });
+    document.addEventListener('mouseup', () => { isAdjustingVolume = false; });
+
+    function showControls() {
+      controls.classList.add('visible');
+      container.classList.remove('hide-cursor');
+      clearTimeout(hideControlsTimeout);
+      hideControlsTimeout = setTimeout(() => {
+        controls.classList.remove('visible');
+        container.classList.add('hide-cursor');
+      }, 2000);
+    }
+
+    container.addEventListener('mousemove', showControls);
+    video.addEventListener('play', showControls);
+    video.addEventListener('pause', showControls);
+
+    video.addEventListener('timeupdate', updateTime);
+    video.addEventListener('loadedmetadata', () => {
+      updateTime();
+      volumeFill.style.width = `${video.volume * 100}%`;
+    });
+
+    showControls();
+  </script>
+</body>
+</html>
