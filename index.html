@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Lecteur vidéo personnalisé complet</title>
+  <title>Gervais Stream</title>
   <style>
     body {
       margin: 0;
@@ -17,6 +17,10 @@
       position: relative;
       max-width: 800px;
       width: 100%;
+      cursor: none; /* cache le curseur au départ */
+    }
+    .video-container.show-cursor {
+      cursor: default; /* affiche curseur */
     }
     video {
       width: 100%;
@@ -33,9 +37,11 @@
       transform: translate(-50%, -50%);
       transition: transform 0.3s ease;
       z-index: 10;
+      cursor: pointer;
     }
     .intro-play.clicked {
       animation: shrink-bounce 0.4s forwards;
+      pointer-events: none;
     }
     @keyframes shrink-bounce {
       0% { transform: translate(-50%, -50%) scale(1); }
@@ -121,14 +127,13 @@
       background: white;
       width: 100%;
     }
-    .hide-cursor {
-      cursor: none;
-    }
   </style>
 </head>
 <body>
-  <div class="video-container hide-cursor" id="videoContainer">
+  <div class="video-container" id="videoContainer">
     <video id="video" src="video.mp4"></video>
+
+    <div class="intro-play" id="introPlay"></div>
 
     <div class="controls" id="controls">
       <div class="progress-bar" id="progressBar">
@@ -170,10 +175,14 @@
     const volumeBar = document.getElementById('volumeBar');
     const volumeFill = document.getElementById('volumeFill');
     const container = document.getElementById('videoContainer');
+    const introPlay = document.getElementById('introPlay');
 
     let hideControlsTimeout;
     let isSeeking = false;
     let isAdjustingVolume = false;
+
+    // Variable pour savoir si on lit la vidéo "intro" ou la vidéo de l'utilisateur
+    let playingIntro = true;
 
     function formatTime(seconds) {
       const m = Math.floor(seconds / 60).toString().padStart(2, '0');
@@ -207,8 +216,12 @@
       }
     });
 
-    rewind.addEventListener('click', () => video.currentTime -= 10);
-    forward.addEventListener('click', () => video.currentTime += 10);
+    rewind.addEventListener('click', () => {
+      video.currentTime = Math.max(0, video.currentTime - 10);
+    });
+    forward.addEventListener('click', () => {
+      video.currentTime = Math.min(video.duration, video.currentTime + 10);
+    });
 
     fullscreen.addEventListener('click', () => {
       if (!document.fullscreenElement) container.requestFullscreen();
@@ -238,33 +251,95 @@
 
     function showControls() {
       controls.classList.add('visible');
-      container.classList.remove('hide-cursor');
+      container.classList.add('show-cursor');
       clearTimeout(hideControlsTimeout);
       hideControlsTimeout = setTimeout(() => {
         controls.classList.remove('visible');
-        container.classList.add('hide-cursor');
+        container.classList.remove('show-cursor');
       }, 2000);
     }
 
-    container.addEventListener('mousemove', showControls);
-    video.addEventListener('play', showControls);
-    video.addEventListener('pause', showControls);
+    container.addEventListener('mousemove', () => {
+      if (!playingIntro) showControls();
+    });
+    video.addEventListener('play', () => { if (!playingIntro) showControls(); });
+    video.addEventListener('pause', () => { if (!playingIntro) showControls(); });
 
-    video.addEventListener('timeupdate', updateTime);
-    video.addEventListener('loadedmetadata', () => {
-      updateTime();
-      volumeFill.style.width = `${video.volume * 100}%`;
+    video.addEventListener('timeupdate', () => {
+      if (!playingIntro) updateTime();
     });
 
-    showControls();
+    video.addEventListener('loadedmetadata', () => {
+      if (!playingIntro) {
+        updateTime();
+        volumeFill.style.width = `${video.volume * 100}%`;
+      }
+    });
+
+    // Gère le clique sur l'image intro "gervais.png"
+    introPlay.addEventListener('click', () => {
+      introPlay.classList.add('clicked');
+    });
+
+    // Quand l'animation intro-play est finie, lance la vidéo intro "video.mp4"
+    introPlay.addEventListener('animationend', () => {
+      introPlay.style.display = 'none';
+      video.play();
+    });
+
+    // Quand la vidéo "video.mp4" se termine, on charge la vidéo du lien et on affiche les contrôles
+    video.addEventListener('ended', () => {
+      if (playingIntro) {
+        // Récupère le paramètre ?video=...
+        const urlParams = new URLSearchParams(window.location.search);
+        const userVideo = urlParams.get('video');
+
+        if (userVideo) {
+          video.src = decodeURIComponent(userVideo);
+        } else {
+          video.src = ''; // Pas de vidéo user, on met vide ou message
+        }
+        playingIntro = false;
+        controls.classList.add('visible');
+        container.classList.add('show-cursor');
+        video.load();
+        video.play();
+      }
+    });
+
+    // Au chargement, on cache les controls (normal) et on affiche introPlay
+    window.addEventListener('load', () => {
+      controls.classList.remove('visible');
+      container.classList.remove('show-cursor');
+      introPlay.style.display = 'block';
+      video.volume = 1;
+      volumeFill.style.width = '100%';
+      // On ne montre pas controls ni curseur pendant intro + video.mp4
+    });
+
+    // Flèches directionnelles : avance/recul 10s + volume haut/bas
     document.addEventListener('keydown', (e) => {
-    if (controls.style.display === "flex") {
-        if (e.key === "ArrowRight") video.currentTime += 10;
-        if (e.key === "ArrowLeft") video.currentTime -= 10;
-        if (e.key === "ArrowUp") video.volume = Math.min(video.volume + 0.1, 1);
-        if (e.key === "ArrowDown") video.volume = Math.max(video.volume - 0.1, 0);
-    }
-});
+      if (!playingIntro && controls.classList.contains('visible')) {
+        if (e.key === "ArrowRight") {
+          e.preventDefault();
+          video.currentTime = Math.min(video.duration, video.currentTime + 10);
+        }
+        if (e.key === "ArrowLeft") {
+          e.preventDefault();
+          video.currentTime = Math.max(0, video.currentTime - 10);
+        }
+        if (e.key === "ArrowUp") {
+          e.preventDefault();
+          video.volume = Math.min(video.volume + 0.1, 1);
+          volumeFill.style.width = `${video.volume * 100}%`;
+        }
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          video.volume = Math.max(video.volume - 0.1, 0);
+          volumeFill.style.width = `${video.volume * 100}%`;
+        }
+      }
+    });
   </script>
 </body>
 </html>
