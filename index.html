@@ -257,6 +257,14 @@
     });
 
     showControls();
+    document.addEventListener('keydown', (e) => {
+    if (controls.style.display === "flex") {
+        if (e.key === "ArrowRight") video.currentTime += 10;
+        if (e.key === "ArrowLeft") video.currentTime -= 10;
+        if (e.key === "ArrowUp") video.volume = Math.min(video.volume + 0.1, 1);
+        if (e.key === "ArrowDown") video.volume = Math.max(video.volume - 0.1, 0);
+    }
+});
   </script>
 </body>
 </html>
